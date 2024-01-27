@@ -189,7 +189,7 @@ app.get("/getAllNotes", express.json(), async (req, res) => {
       const data = await collection.find({
         username: decoded.username,
       }).toArray();
-      console.log(decoded.username);
+      //console.log(decoded.username);
       if (!data) {
         return res
           .status(404)
@@ -223,18 +223,17 @@ app.delete("/deleteNote/:noteID", express.json(), async (req, res) => {
       }
 
       const collection = db.collection(COLLECTIONS.notes);
+
       const data = await collection.deleteOne({
         username: decoded.username,
         _id: new ObjectId(noteID)
       })
-      console.log(data.acknowledged);
-      console.log(data.deletedCount);
       if (data.acknowledged && data.deletedCount == 1) {
         return res.status(200)
-          .json({ response: "Document with ID {noteId} properly deleted." });
+          .json({ response: `Document with ID ${noteID} properly deleted.` });
       }
       else {
-        return res.status(404).json({ error: "Note with ID {noteId} belonging to the user not found" });
+        return res.status(404).json({ error: `Note with ID ${noteID} belonging to the user not found` });
       }
 
     });
@@ -243,4 +242,54 @@ app.delete("/deleteNote/:noteID", express.json(), async (req, res) => {
       .json({ error: error.message })
   }
 
+});
+
+//patch request
+app.patch("/editNote/:noteID", express.json(), async (req, res) => {
+  try {
+    //check note ID
+    const noteID = req.params.noteID;
+    if (!ObjectId.isValid(noteID)) {
+      return res.status(400)
+        .json({ error: "Bad request in relation to the :noteId URL parameter" });
+    }
+
+    // Basic body request check
+    const { title, content } = req.body;
+    if (!title && !content) {
+      return res
+        .status(400)
+        .json({ error: "Title or content is required." });
+    }
+
+    const token = req.headers.authorization.split(" ")[1];
+    jwt.verify(token, "secret-key", async (err, decoded) => {
+      if (err) {
+        return res.status(401).send("Unauthorized.");
+      }
+
+      const collection = db.collection(COLLECTIONS.notes);
+
+      var data = {}
+      if (title) {
+        data = { ...data, title }
+      }
+      if (content) {
+        data = { ...data, content }
+      }
+      const ogDoc = await collection.findOneAndUpdate({ _id: new ObjectId(noteID), username: decoded.username }, { $set: data });
+
+      if (!ogDoc) {
+        return res.status(404).json({ error: `Note with ID ${noteID} belonging to the user ${decoded.username} not found` });
+      }
+
+      return res.status(200).json({ response: "Note edited successfully" });
+
+
+    })
+
+
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
 });
